@@ -1,0 +1,1 @@
+A basic chatbot made using Google Gemini 2.5 flash
