@@ -1,32 +1,48 @@
 import os
 import argparse
 from dotenv import load_dotenv # type: ignore
-
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key == None:
-    raise RuntimeError("Environmental Variable not found. Check API Key and ensure env paths are accurate")
-        
 from google import genai
-client = genai.Client(api_key=api_key)
+from google.genai import types
 
 def main():
+
     parser = argparse.ArgumentParser(description="Chatbot")
     parser.add_argument("user_prompt", type=str, help="type your prompt")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
-    
-    response = client.models.generate_content(model='gemini-2.5-flash', contents=args.user_prompt)
-    if response.usage_metadata == None:
+
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    if api_key == None:
+        raise RuntimeError("Environmental Variable not found. Check API Key and ensure env paths are accurate")
+        
+    client = genai.Client(api_key=api_key)
+    messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
+    generate_content(client, messages, args)
+
+
+
+def generate_content (client, messages, args):
+    response = client.models.generate_content(
+        model='gemini-2.5-flash', 
+        contents=messages,
+    )
+
+    if not response.usage_metadata:
         raise RuntimeError("Request to Gemini failed. No metadata returned.")
     
-    prompt_token_count = response.usage_metadata.total_token_count
-    candidates_token_count = response.usage_metadata.candidates_token_count
+    if args.verbose:
+        prompt_token_count = response.usage_metadata.total_token_count
+        candidates_token_count = response.usage_metadata.candidates_token_count
 
-    print("User Prompt:", args.user_prompt)
-    print("Prompt tokens: ", prompt_token_count)
-    print("Response tokens: ", candidates_token_count)
+        print("User prompt:", args.user_prompt)
+        print("Prompt tokens: ", prompt_token_count)
+        print("Response tokens: ", candidates_token_count)
+        
 
     print("Response: ", response.text)
+    
 
 
 if __name__ == "__main__":
