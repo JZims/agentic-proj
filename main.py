@@ -4,7 +4,7 @@ from prompts import system_prompt
 from dotenv import load_dotenv # type: ignore
 from google import genai
 from google.genai import types
-from functions.call_function import available_functions
+from functions.call_function import available_functions, call_function
 
 config = types.GenerateContentConfig(
         tools=[available_functions], system_instruction=system_prompt, temperature=0
@@ -27,15 +27,12 @@ def main():
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
     generate_content(client, messages, args)
 
-   
-
 
 def generate_content (client, messages, args):
     response = client.models.generate_content(
         model='gemini-2.5-flash', 
         contents=messages,
-        config=config,
-        
+        config=config,     
     )
 
     if not response.usage_metadata:
@@ -51,7 +48,15 @@ def generate_content (client, messages, args):
 
     if response.function_calls:
         for call in response.function_calls:
-            print(f"Calling function: {call.name}({call.args})")
+            function_call_result = call_function(call)
+            if not function_call_result.parts:
+                raise Exception("Invalid response generated")
+            if not function_call_result.parts[0].function_response:
+                raise Exception("Invalid function response generated")
+            if not function_call_result.parts[0].function_response.response:
+                raise Exception("Invalid function response generated")
+            if args.verbose:
+                print(f"-> {function_call_result.parts[0].function_response.response}")
     else:
         print(response.text)
     
