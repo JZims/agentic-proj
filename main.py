@@ -1,5 +1,6 @@
 import os
 import argparse
+import sys
 from prompts import system_prompt
 from dotenv import load_dotenv # type: ignore
 from google import genai
@@ -25,7 +26,20 @@ def main():
         
     client = genai.Client(api_key=api_key)
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
-    generate_content(client, messages, args)
+
+    
+    for _ in range(20):
+        try:
+            final_response = generate_content(client, messages, args)
+            if final_response:
+                print("Final response:")
+                print(final_response)
+                return
+        except Exception as e:
+            print(f"Error in generate_content: {e}")
+
+    print(f"Maximum iterations reached")
+    sys.exit(1)
 
 
 def generate_content (client, messages, args):
@@ -34,6 +48,7 @@ def generate_content (client, messages, args):
         contents=messages,
         config=config,     
     )
+    function_responses = []
 
     if not response.usage_metadata:
         raise RuntimeError("Request to Gemini failed. No metadata returned.")
@@ -46,9 +61,17 @@ def generate_content (client, messages, args):
         print("Prompt tokens: ", prompt_token_count)
         print("Response tokens: ", candidates_token_count)
 
+    if response.candidates:
+        for candidate in response.candidates:
+            if candidate.content:
+                messages.append(candidate.content)
+
+    if not response.function_calls:
+        return response.text
+
     if response.function_calls:
-        for call in response.function_calls:
-            function_call_result = call_function(call)
+        for result in response.function_calls:
+            function_call_result = call_function(result)
             if not function_call_result.parts:
                 raise Exception("Invalid response generated")
             if not function_call_result.parts[0].function_response:
@@ -57,10 +80,9 @@ def generate_content (client, messages, args):
                 raise Exception("Invalid function response generated")
             if args.verbose:
                 print(f"-> {function_call_result.parts[0].function_response.response}")
-    else:
-        print(response.text)
-    
+            function_responses.append(function_call_result.parts[0])
 
+        messages.append(types.Content(role="user", parts=function_responses))  
 
 if __name__ == "__main__":
     main()
